@@ -3,16 +3,30 @@ services:
   user_service:
     image: "quay.io/danielmunro/otto-user-service:latest"
     container_name: "user_service"
+    env_file:
+      - .env-user-service
+    links:
+      - db
+      - kafka
     ports:
       - "8080:8080"
   community_service:
     image: "quay.io/danielmunro/otto-community-service:latest"
     container_name: "community_service"
+    env_file:
+      - .env-community-service
+    links:
+      - db
+      - kafka
     ports:
       - "8081:8081"
 #  image_service:
 #    image: "quay.io/danielmunro/otto-image-service:latest"
 #    container_name: "image_service"
+#    env_file:
+#     - .env-image-service
+#    links:
+#     - db
 #    ports:
 #      - "8082:8082"
 #  ui:
@@ -23,13 +37,17 @@ services:
   api_gw:
     image: "quay.io/danielmunro/otto-api-gw:latest"
     container_name: "api_gw"
+    links:
+      - user_service
+      - community_service
+#      - image_service
     ports:
       - "8000:8000"
   db:
     image: "postgres"
     container_name: "my_postgres"
     env_file:
-      - .env
+      - .env-db
     ports:
       - "54321:5432"
     volumes:
@@ -42,6 +60,8 @@ services:
   kafka:
     image: confluentinc/cp-kafka:5.2.1
     hostname: kafka
+    links:
+      - zookeeper
     ports:
       - "9092:9092"
     environment:
