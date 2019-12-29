@@ -1,57 +1,56 @@
-version: "3"
+version: "3.7"
 services:
   user_service:
     image: "quay.io/danielmunro/otto-user-service:latest"
-    container_name: "user_service"
     env_file:
       - .env-user-service
-    links:
-      - db
-      - kafka
     ports:
       - "8080:8080"
+    depends_on:
+      - kafka
+      - db
   community_service:
     image: "quay.io/danielmunro/otto-community-service:latest"
-    container_name: "community_service"
     env_file:
       - .env-community-service
-    links:
-      - db
-      - kafka
     ports:
       - "8081:8081"
+    depends_on:
+      - kafka
+      - db
 #  image_service:
 #    image: "quay.io/danielmunro/otto-image-service:latest"
-#    container_name: "image_service"
 #    env_file:
 #     - .env-image-service
 #    links:
 #     - db
 #    ports:
 #      - "8082:8082"
-#  ui:
-#    image: "quay.io/danielmunro/otto-ui:latest"
-#    container_name: "ui"
-#    ports:
-#      - "8083:8083"
+  ui:
+    image: "quay.io/danielmunro/otto-ui:latest"
+    container_name: "ui"
+    ports:
+      - "8083:8083"
   api_gw:
     image: "quay.io/danielmunro/otto-api-gw:latest"
-    container_name: "api_gw"
-    links:
-      - user_service
-      - community_service
-#      - image_service
     ports:
       - "8000:8000"
+    env_file:
+      - .env-api-gw
   db:
     image: "postgres"
-    container_name: "my_postgres"
+    hostname: db
     env_file:
       - .env-db
     ports:
       - "54321:5432"
     volumes:
       - ./postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
   zookeeper:
     image: wurstmeister/zookeeper
     hostname: zookeeper
@@ -60,20 +59,22 @@ services:
   kafka:
     image: confluentinc/cp-kafka:5.2.1
     hostname: kafka
-    links:
-      - zookeeper
     ports:
       - "9092:9092"
     environment:
-      KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka:19092,LISTENER_DOCKER_EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9092
+      KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka:19092,LISTENER_DOCKER_EXTERNAL://kafka:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
       KAFKA_BROKER_ID: 1
-      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_CREATE_TOPICS: "users:1:1"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - zookeeper
+    healthcheck:
+      test: ["CMD", "bash", "-c", "unset" , "JMX_PORT" ,";" ,"kafka-topics.sh","--zookeeper","zookeeper:2181","--list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
